@@ -16,12 +16,15 @@ configuration_file = "config.json"
 with open(configuration_file) as f:
     config = json.load(f)
 
-tmp = diavgea_client.get_organizations()
-# Example usage
-#response = diavgea_client.get_decision("6Π5Μ46Ψ8ΒΠ-ΕΨΟ")
-organization = OraganisationModel(**tmp["organizations"][0])
+# Fetch organizations
+organizations = diavgea_client.get_organizations()
+orgs_list = organizations.get("organizations", [])
 
-org_db = OrganisationSql(**organization.model_dump())
+org_db_list = []
+for org_data in orgs_list:
+    organization = OraganisationModel(**org_data)
+    org_db = OrganisationSql(**organization.model_dump())
+    org_db_list.append(org_db)
 
 # Create engine for diavgeia.db SQLite database
 engine = create_engine(f'mysql+mysqlconnector://{config["Sql"]["username"]}:{config["Sql"]["password"]}@{config["Sql"]["host"]}:{config["Sql"]["port"]}/diavgeia')
@@ -33,8 +36,12 @@ Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 session = Session()
 
-# Save to database
-session.add(org_db)
-session.commit()
+for org_db in org_db_list:
+    # Save to database
+    # Check if organisation already exists in the database
+    existing_org = session.query(OrganisationSql).filter_by(uid=org_db.uid).first()
+    if not existing_org:
+        session.add(org_db)
+        session.commit()
 
 print("stop")
